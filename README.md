@@ -41,5 +41,3 @@ Namma Railu Buddy acts as a passenger guide by offering:
 - Makes railway navigation easier for first-time users
 - Enhances overall public transport experience
 
-## Repository
-https://github.com/justsakshi/NammaRailuBuddy
