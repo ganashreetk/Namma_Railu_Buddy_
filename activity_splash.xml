@@ -1,0 +1,120 @@
+package com.example.nammarailubuddy
+
+import android.Manifest
+import android.app.*
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.Location
+import android.os.IBinder
+import android.os.Looper
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.*
+
+class ProximityAlarmService : Service() {
+
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private lateinit var locationCallback: LocationCallback
+
+    private var destLat: Double = 0.0
+    private var destLon: Double = 0.0
+    private var destName: String = ""
+    private val TRIGGER_DISTANCE_METERS = 5000f // 5 km
+    private val CHANNEL_ID = "proximity_alarm_channel"
+
+    override fun onCreate() {
+        super.onCreate()
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        createNotificationChannel()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        destLat = intent?.getDoubleExtra("dest_lat", 0.0) ?: 0.0
+        destLon = intent?.getDoubleExtra("dest_lon", 0.0) ?: 0.0
+        destName = intent?.getStringExtra("dest_name") ?: "your destination"
+
+        startForeground(1, buildForegroundNotification())
+        startLocationTracking()
+
+        return START_STICKY
+    }
+
+    private fun startLocationTracking() {
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30000L)
+            .setMinUpdateDistanceMeters(200f)
+            .build()
+
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val location = result.lastLocation ?: return
+                checkProximity(location)
+            }
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+        }
+    }
+
+    private fun checkProximity(location: Location) {
+        val dest = Location("destination").apply {
+            latitude = destLat
+            longitude = destLon
+        }
+        val distanceMeters = location.distanceTo(dest)
+
+        if (distanceMeters <= TRIGGER_DISTANCE_METERS) {
+            triggerAlarm()
+        }
+    }
+
+    private fun triggerAlarm() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🚨 Wake Up! Approaching $destName")
+            .setContentText("You are within 5km of $destName. Prepare to deboard!")
+            .setSmallIcon(R.drawable.ic_train_logo)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVibrate(longArrayOf(0, 500, 200, 500, 200, 500))
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(2, notification)
+
+        // Stop service after alarm fires
+        stopSelf()
+    }
+
+    private fun buildForegroundNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Namma-Railu Buddy Active")
+            .setContentText("Watching for $destName...")
+            .setSmallIcon(R.drawable.ic_train_logo)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Proximity Alarm",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Alerts when approaching destination station"
+            enableVibration(true)
+        }
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.createNotificationChannel(channel)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::locationCallback.isInitialized) {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}

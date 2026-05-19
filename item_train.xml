@@ -1,0 +1,252 @@
+package com.example.nammarailubuddy
+
+data class Train(
+    val trainNumber: String = "",
+    val trainName: String = "",
+    val fromStation: String = "",
+    val toStation: String = "",
+    val departureTime: String = "",
+    val arrivalTime: String = "",
+    val coachLayout: List<String> = emptyList(),
+    val platformNumber: Int = 1
+)
+
+data class PlatformPing(
+    val trainNumber: String = "",
+    val stationCode: String = "",
+    val platform: Int = 0,
+    val correctedPlatform: Int = -1,
+    val reportedBy: String = "",
+    val timestamp: Long = 0L,
+    val delayMinutes: Int = 0
+)
+
+data class Station(
+    val code: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double
+)
+
+object TrainDataRepository {
+
+    val stations = listOf(
+
+        // ── Mysuru–Bangalore corridor ──────────────────────────────────
+        Station("MYS",  "Mysuru Junction",       12.3051, 76.6552),
+        Station("MNDYA","Mandya",                12.5244, 76.8961),
+        Station("KRGD", "Kirugavalu",            12.3967, 76.9716),
+        Station("MDDL", "Maddur",               12.5842, 77.0448),
+        Station("BLTR", "Belatur",              12.6222, 77.0801),
+        Station("BNGL", "Bangalore City",       12.9762, 77.5993),
+        Station("BNC",  "Bangalore Cantonment", 12.9955, 77.6101),
+        Station("KJM",  "Krishnarajapuram",     13.0057, 77.6649),
+        Station("YPR",  "Yesvantpur Junction",  13.0197, 77.5396),
+
+        // ── Hassan corridor ───────────────────────────────────────────
+        Station("HSNA", "Hassan",               13.0068, 76.0996),
+        Station("SKLR", "Sakleshpur",           12.9469, 75.7837),
+        Station("SBHR", "Shravanabelagola",     12.8548, 76.4847),
+        Station("CNNR", "Channarayapatna",      12.9038, 76.3869),
+        Station("ARVR", "Arsikere Junction",    13.3143, 76.2571),
+
+        // ── Birur / Shivamogga corridor ───────────────────────────────
+        Station("BIR",  "Birur Junction",       13.5961, 75.9714),
+        Station("SHVG", "Shivamogga Town",      13.9299, 75.5681),
+        Station("BHADRAVATI", "Bhadravati",     13.8564, 75.7005),
+        Station("TADU", "Talaguppa",            14.0397, 74.8042),
+
+        // ── Tumkur / Davangere / Hubli corridor ───────────────────────
+        Station("TMLK", "Tumkur",               13.3409, 77.1014),
+        Station("DAVG", "Davangere",            14.4644, 75.9218),
+        Station("HBL",  "Hubli Junction",       15.3647, 75.1240),
+        Station("DHW",  "Dharwad",              15.4589, 75.0078),
+        Station("GDGL", "Gadag Junction",       15.4167, 75.6167),
+
+        // ── Belagavi (Belgaum) corridor ───────────────────────────────
+        Station("BGM",  "Belagavi",             15.8497, 74.4977),
+        Station("LNDI", "Londa Junction",       15.4667, 74.5167),
+        Station("KSTG", "Kasturba Nagar",       15.4500, 74.4833),
+
+        // ── Ballari / Raichur corridor ────────────────────────────────
+        Station("BAY",  "Ballari Junction",     15.1394, 76.9214),
+        Station("RCH",  "Raichur",              16.2120, 77.3440),
+        Station("GNBV", "Gangavathi",           15.4333, 76.5333),
+        Station("HPT",  "Hosapete Junction",    15.2689, 76.3909),
+        Station("BLPR", "Bellary Road",         15.1500, 76.9333),
+
+        // ── Kalaburagi (Gulbarga) / Bidar corridor ────────────────────
+        Station("GR",   "Kalaburagi",           17.3297, 76.8343),
+        Station("BIDR", "Bidar",                17.9140, 77.5152),
+        Station("GLBG", "Gulbarga Junction",    17.3300, 76.8200),
+
+        // ── Vijayapura (Bijapur) corridor ─────────────────────────────
+        Station("BJP",  "Vijayapura",           16.8302, 75.7100),
+        Station("BGVT", "Bagalkot",             16.1833, 75.7000),
+        Station("ILKL", "Ilkal",                15.9500, 76.1167),
+
+        // ── Kodagu / Mangaluru corridor ───────────────────────────────
+        Station("MAJN", "Mangaluru Junction",   12.8703, 74.8430),
+        Station("MNGR", "Mangaluru Central",    12.8698, 74.8432),
+        Station("UDUPI","Udupi",                13.3409, 74.7421),
+        Station("KUNDP","Kundapur",             13.6206, 74.6910),
+        Station("BYNR", "Byndoor",              13.8620, 74.6520),
+
+        // ── Chamarajanagar / Kollegal ─────────────────────────────────
+        Station("CMNR", "Chamarajanagar",       11.9216, 76.9437),
+        Station("BAND", "Bandipura",            11.9977, 76.5002),
+
+        // ── Kolar / Chikkaballapur ────────────────────────────────────
+        Station("KGF",  "Kolar Gold Fields",    12.9583, 78.2714),
+        Station("KOLAR","Kolar",                13.1333, 78.1333),
+        Station("CKBP", "Chikkaballapur",       13.4333, 77.7333),
+
+        // ── Chitradurga / Chikkamagaluru ──────────────────────────────
+        Station("CTA",  "Chitradurga",          14.2251, 76.3980),
+        Station("CKMG", "Chikkamagaluru",       13.3161, 75.7720),
+        Station("KADS", "Kadur Junction",       13.5500, 76.0167),
+
+        // ── Koppal / Yadgir ───────────────────────────────────────────
+        Station("KPPL", "Koppal",               15.3500, 76.1500),
+        Station("YADG", "Yadgir",               16.7667, 77.1333),
+
+        // ── Uttara Kannada ────────────────────────────────────────────
+        Station("KARW", "Karwar",               14.8136, 74.1288),
+        Station("ANKL", "Ankola",               14.6667, 74.3000),
+        Station("KUMTA","Kumta",                14.4270, 74.4120),
+        Station("HVRN", "Haveri",               14.7956, 75.3997),
+    )
+
+    val sampleTrains = listOf(
+
+        // ── Mysuru–Bangalore ──────────────────────────────────────────
+        Train("56201", "Mysuru-Bangalore Passenger",
+            "MYS", "BNGL", "06:10", "10:30",
+            listOf("Engine","GEN","GEN","Ladies","GEN","GEN","Guard"), 1),
+        Train("56202", "Bangalore-Mysuru Passenger",
+            "BNGL", "MYS", "07:15", "11:45",
+            listOf("Engine","GEN","Ladies","GEN","GEN","Guard"), 3),
+
+        // ── Hassan–Bangalore ──────────────────────────────────────────
+        Train("56270", "Hassan-Bangalore Passenger",
+            "HSNA", "BNGL", "05:30", "09:50",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 2),
+        Train("56271", "Bangalore-Hassan Passenger",
+            "BNGL", "HSNA", "15:45", "20:00",
+            listOf("Engine","GEN","Ladies","GEN","GEN","GEN","Guard"), 4),
+
+        // ── Birur–Bangalore ───────────────────────────────────────────
+        Train("56232", "Birur-Bangalore Passenger",
+            "BIR", "BNGL", "04:55", "10:15",
+            listOf("Engine","GEN","GEN","GEN","Ladies","GEN","Guard"), 1),
+
+        // ── Shivamogga–Birur ─────────────────────────────────────────
+        Train("56275", "Shivamogga-Birur Passenger",
+            "SHVG", "BIR", "07:00", "08:45",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 1),
+        Train("56276", "Birur-Shivamogga Passenger",
+            "BIR", "SHVG", "11:00", "12:50",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+
+        // ── Arsikere–Bangalore ────────────────────────────────────────
+        Train("56222", "Arsikere-Bangalore Passenger",
+            "ARVR", "BNGL", "06:00", "10:30",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 1),
+        Train("56223", "Bangalore-Arsikere Passenger",
+            "BNGL", "ARVR", "16:30", "21:00",
+            listOf("Engine","GEN","Ladies","GEN","GEN","Guard"), 2),
+
+        // ── Tumkur–Bangalore ──────────────────────────────────────────
+        Train("56218", "Tumkur-Bangalore Passenger",
+            "TMLK", "BNGL", "06:45", "08:30",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 1),
+        Train("56219", "Bangalore-Tumkur Passenger",
+            "BNGL", "TMLK", "18:00", "19:50",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 3),
+
+        // ── Davangere–Hubli ───────────────────────────────────────────
+        Train("56910", "Davangere-Hubli Passenger",
+            "DAVG", "HBL", "08:10", "10:30",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 2),
+        Train("56911", "Hubli-Davangere Passenger",
+            "HBL", "DAVG", "13:00", "15:20",
+            listOf("Engine","GEN","Ladies","GEN","GEN","Guard"), 1),
+
+        // ── Hubli–Dharwad ─────────────────────────────────────────────
+        Train("56904", "Hubli-Dharwad Passenger",
+            "HBL", "DHW", "07:30", "08:10",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 3),
+        Train("56905", "Dharwad-Hubli Passenger",
+            "DHW", "HBL", "08:30", "09:10",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 1),
+
+        // ── Hubli–Gadag ───────────────────────────────────────────────
+        Train("56916", "Hubli-Gadag Passenger",
+            "HBL", "GDGL", "09:00", "10:15",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 2),
+        Train("56917", "Gadag-Hubli Passenger",
+            "GDGL", "HBL", "11:00", "12:15",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 1),
+
+        // ── Belagavi–Londa ────────────────────────────────────────────
+        Train("56652", "Belagavi-Londa Passenger",
+            "BGM", "LNDI", "07:20", "09:00",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 1),
+        Train("56653", "Londa-Belagavi Passenger",
+            "LNDI", "BGM", "10:00", "11:45",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+
+        // ── Hosapete–Ballari ─────────────────────────────────────────
+        Train("56921", "Hosapete-Ballari Passenger",
+            "HPT", "BAY", "08:00", "09:20",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 1),
+        Train("56922", "Ballari-Hosapete Passenger",
+            "BAY", "HPT", "11:00", "12:20",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+
+        // ── Raichur–Kalaburagi ────────────────────────────────────────
+        Train("57301", "Raichur-Kalaburagi Passenger",
+            "RCH", "GR", "07:00", "10:00",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 1),
+        Train("57302", "Kalaburagi-Raichur Passenger",
+            "GR", "RCH", "11:30", "14:30",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+
+        // ── Mangaluru–Udupi ───────────────────────────────────────────
+        Train("56901", "Mangaluru-Udupi Passenger",
+            "MAJN", "UDUPI", "07:00", "08:30",
+            listOf("Engine","GEN","GEN","Ladies","GEN","Guard"), 1),
+        Train("56902", "Udupi-Mangaluru Passenger",
+            "UDUPI", "MAJN", "09:00", "10:30",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+
+        // ── Kolar–Bangalore ───────────────────────────────────────────
+        Train("56520", "Kolar-Bangalore Passenger",
+            "KOLAR", "BNGL", "06:30", "09:00",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 1),
+        Train("56521", "Bangalore-Kolar Passenger",
+            "BNGL", "KOLAR", "17:30", "20:00",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 5),
+
+        // ── Chamarajanagar–Mysuru ─────────────────────────────────────
+        Train("56210", "Chamarajanagar-Mysuru Passenger",
+            "CMNR", "MYS", "06:00", "08:00",
+            listOf("Engine","GEN","GEN","Ladies","Guard"), 1),
+        Train("56211", "Mysuru-Chamarajanagar Passenger",
+            "MYS", "CMNR", "16:00", "18:00",
+            listOf("Engine","GEN","Ladies","GEN","Guard"), 2),
+    )
+
+    fun getTrainsForStation(stationCode: String): List<Train> {
+        return sampleTrains.filter {
+            it.fromStation == stationCode || it.toStation == stationCode
+        }
+    }
+
+    fun searchStations(query: String): List<Station> {
+        return stations.filter {
+            it.name.contains(query, ignoreCase = true) ||
+                    it.code.contains(query, ignoreCase = true)
+        }
+    }
+}

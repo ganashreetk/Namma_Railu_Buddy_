@@ -1,0 +1,49 @@
+package com.example.nammarailubuddy
+
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+
+class SplashActivity : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_splash)
+
+        val content = findViewById<LinearLayout>(R.id.splashContent)
+        val bottomTag = findViewById<TextView>(R.id.tvBottomTag)
+
+        // Animate main content: fade in + scale up
+        content.scaleX = 0.7f
+        content.scaleY = 0.7f
+        content.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(700)
+            .setInterpolator(OvershootInterpolator(1.2f))
+            .start()
+
+        // Animate bottom tag after short delay
+        Handler(Looper.getMainLooper()).postDelayed({
+            bottomTag.animate()
+                .alpha(1f)
+                .setDuration(500)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .start()
+        }, 500)
+
+        // Navigate to MainActivity
+        Handler(Looper.getMainLooper()).postDelayed({
+            startActivity(Intent(this, MainActivity::class.java))
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            finish()
+        }, 2500)
+    }
+}

@@ -1,0 +1,288 @@
+package com.example.nammarailubuddy
+
+import android.graphics.*
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.view.*
+import android.widget.*
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.firebase.database.ValueEventListener
+import java.text.SimpleDateFormat
+import java.util.*
+
+class PingDetailsBottomSheet : BottomSheetDialogFragment() {
+
+    private var stationCode = ""
+    private var trainNumber = ""
+    private var trainName   = ""
+    private var listener: ValueEventListener? = null
+
+    companion object {
+        fun newInstance(stationCode: String, trainNumber: String, trainName: String) =
+            PingDetailsBottomSheet().apply {
+                arguments = Bundle().apply {
+                    putString("stationCode", stationCode)
+                    putString("trainNumber", trainNumber)
+                    putString("trainName",   trainName)
+                }
+            }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        stationCode = arguments?.getString("stationCode") ?: ""
+        trainNumber = arguments?.getString("trainNumber") ?: ""
+        trainName   = arguments?.getString("trainName")   ?: ""
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+    ): View {
+        val ctx = requireContext()
+        val d   = ctx.resources.displayMetrics.density
+        fun Int.dp() = (this * d).toInt()
+
+        val WHITE    = Color.WHITE
+        val INK      = Color.parseColor("#111827")
+        val MUTED    = Color.parseColor("#6B7280")
+        val GREEN_BG = Color.parseColor("#DCFCE7"); val GREEN_FG = Color.parseColor("#15803D")
+        val RED_BG   = Color.parseColor("#FEE2E2"); val RED_FG   = Color.parseColor("#DC2626")
+        val BLUE_BG  = Color.parseColor("#DBEAFE"); val BLUE_FG  = Color.parseColor("#1D4ED8")
+        val DIVIDER  = Color.parseColor("#F3F4F6")
+
+        fun pill(color: Int) = GradientDrawable().apply { setColor(color); cornerRadius = 99f * d }
+
+        // Root
+        val scroll = ScrollView(ctx).apply { setBackgroundColor(WHITE) }
+        val root = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(WHITE)
+            setPadding(0, 0, 0, 60.dp())
+        }
+        scroll.addView(root)
+
+        // Drag handle
+        root.addView(FrameLayout(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 28.dp())
+            addView(View(ctx).apply {
+                layoutParams = FrameLayout.LayoutParams(48.dp(), 4.dp(), Gravity.CENTER)
+                background = pill(Color.parseColor("#D1D5DB"))
+            })
+        })
+
+        // Train name + subtitle
+        root.addView(TextView(ctx).apply {
+            text = trainName
+            textSize = 18f; setTypeface(null, Typeface.BOLD); setTextColor(INK)
+            setPadding(24.dp(), 0, 24.dp(), 2.dp())
+        })
+        root.addView(TextView(ctx).apply {
+            text = "Community Reports"
+            textSize = 13f; setTextColor(MUTED)
+            setPadding(24.dp(), 0, 24.dp(), 20.dp())
+        })
+
+        // Summary card
+        val summaryCard = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16.dp(), 14.dp(), 16.dp(), 14.dp())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(24.dp(), 0, 24.dp(), 24.dp()) }
+            visibility = View.GONE
+        }
+        val summaryIcon  = TextView(ctx).apply {
+            textSize = 22f
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).also { it.marginEnd = 12.dp() }
+        }
+        val summaryTitle = TextView(ctx).apply { textSize = 14f; setTypeface(null, Typeface.BOLD) }
+        val summaryDesc  = TextView(ctx).apply { textSize = 12f; setTextColor(MUTED); setPadding(0, 2.dp(), 0, 0) }
+        val summaryTexts = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            addView(summaryTitle); addView(summaryDesc)
+        }
+        summaryCard.addView(summaryIcon); summaryCard.addView(summaryTexts)
+        root.addView(summaryCard)
+
+        // "ALL REPORTS" label
+        val sectionLabel = TextView(ctx).apply {
+            text = "ALL REPORTS"
+            textSize = 11f; setTypeface(null, Typeface.BOLD)
+            setTextColor(MUTED); letterSpacing = 0.1f
+            setPadding(24.dp(), 0, 24.dp(), 8.dp())
+            visibility = View.GONE
+        }
+        root.addView(sectionLabel)
+
+        // Empty state
+        val tvEmpty = TextView(ctx).apply {
+            text = "No reports yet. Be the first!"
+            textSize = 14f; setTextColor(MUTED); gravity = Gravity.CENTER
+            setPadding(24.dp(), 48.dp(), 24.dp(), 48.dp())
+            visibility = View.GONE
+        }
+        root.addView(tvEmpty)
+
+        // List
+        val rv = RecyclerView(ctx).apply {
+            layoutManager = LinearLayoutManager(ctx)
+            isNestedScrollingEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        root.addView(rv)
+
+        // Firebase
+        listener = FirebaseHelper.listenForPings(stationCode, trainNumber) { pings ->
+            if (pings.isEmpty()) {
+                summaryCard.visibility = View.GONE
+                sectionLabel.visibility = View.GONE
+                tvEmpty.visibility = View.VISIBLE
+                return@listenForPings
+            }
+            tvEmpty.visibility = View.GONE
+            sectionLabel.visibility = View.VISIBLE
+            summaryCard.visibility = View.VISIBLE
+
+            val analysis = FirebaseHelper.analyzePings(pings, -1)
+            when {
+                analysis.isDelayed && analysis.avgDelayMinutes > 0 -> {
+                    summaryCard.background = pill(RED_BG)
+                    summaryIcon.text = "⚠️"
+                    summaryTitle.setTextColor(RED_FG)
+                    summaryTitle.text = "Running ~${analysis.avgDelayMinutes} min late"
+                    summaryDesc.text = "${pings.size} report(s)"
+                }
+                analysis.platformCorrected -> {
+                    summaryCard.background = pill(BLUE_BG)
+                    summaryIcon.text = "🚉"
+                    summaryTitle.setTextColor(BLUE_FG)
+                    summaryTitle.text = "Platform → ${analysis.communityPlatform}"
+                    summaryDesc.text = "Confirmed by community"
+                }
+                else -> {
+                    summaryCard.background = pill(GREEN_BG)
+                    summaryIcon.text = "✅"
+                    summaryTitle.setTextColor(GREEN_FG)
+                    summaryTitle.text = "Running on time"
+                    summaryDesc.text = "${pings.size} passenger(s) confirmed"
+                }
+            }
+
+            rv.adapter = PingRowAdapter(
+                pings, INK, MUTED, DIVIDER,
+                GREEN_BG, GREEN_FG, RED_BG, RED_FG, BLUE_BG, BLUE_FG
+            )
+        }
+
+        return scroll
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        listener?.let { FirebaseHelper.removePingListener(stationCode, trainNumber, it) }
+    }
+}
+
+class PingRowAdapter(
+    private val pings: List<PlatformPing>,
+    private val INK: Int, private val MUTED: Int, private val DIVIDER: Int,
+    private val GREEN_BG: Int, private val GREEN_FG: Int,
+    private val RED_BG: Int,   private val RED_FG: Int,
+    private val BLUE_BG: Int,  private val BLUE_FG: Int
+) : RecyclerView.Adapter<PingRowAdapter.VH>() {
+
+    private val timeFmt = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+    class VH(root: View, val chip: TextView, val label: TextView, val time: TextView, val divider: View)
+        : RecyclerView.ViewHolder(root)
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        val ctx = parent.context
+        val d   = ctx.resources.displayMetrics.density
+        fun Int.dp() = (this * d).toInt()
+
+        // Chip
+        val chip = TextView(ctx).apply {
+            textSize = 12f; setTypeface(null, Typeface.BOLD)
+            setPadding(12.dp(), 5.dp(), 12.dp(), 5.dp())
+        }
+
+        // Label + time stacked vertically
+        val label = TextView(ctx).apply {
+            textSize = 14f; setTypeface(null, Typeface.BOLD)
+        }
+        val time = TextView(ctx).apply {
+            textSize = 12f; setPadding(0, 2.dp(), 0, 0)
+        }
+
+        // Divider line at bottom of each row
+        val divider = View(ctx).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 1.dp()
+            ).also { it.topMargin = 14.dp() }
+        }
+
+        // Row: [chip]  [label / time / divider]
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            setPadding(24.dp(), 14.dp(), 24.dp(), 0)
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+
+            // left: chip, vertically centered
+            addView(FrameLayout(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).also { it.marginEnd = 14.dp(); it.topMargin = 2.dp() }
+                addView(chip)
+            })
+
+            // right: label, time, divider stacked
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addView(label)
+                addView(time)
+                addView(divider)
+            })
+        }
+
+        return VH(row, chip, label, time, divider)
+    }
+
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        val ping = pings[position]
+        val d    = holder.itemView.context.resources.displayMetrics.density
+
+        holder.time.text = timeFmt.format(Date(ping.timestamp))
+        holder.time.setTextColor(MUTED)
+        holder.divider.setBackgroundColor(DIVIDER)
+        holder.divider.visibility = if (position == itemCount - 1) View.INVISIBLE else View.VISIBLE
+
+        fun applyStyle(bg: Int, fg: Int, chipTxt: String, labelTxt: String) {
+            holder.chip.background = GradientDrawable().apply {
+                setColor(bg); cornerRadius = 99f * d
+            }
+            holder.chip.setTextColor(fg); holder.chip.text = chipTxt
+            holder.label.setTextColor(fg); holder.label.text = labelTxt
+        }
+
+        when {
+            ping.delayMinutes > 0      -> applyStyle(RED_BG,   RED_FG,   "${ping.delayMinutes}m late", "Running ${ping.delayMinutes} min late")
+            ping.correctedPlatform > 0 -> applyStyle(BLUE_BG,  BLUE_FG,  "PF ${ping.correctedPlatform}", "Platform corrected → ${ping.correctedPlatform}")
+            else                       -> applyStyle(GREEN_BG, GREEN_FG, "On time", "Running on time")
+        }
+    }
+
+    override fun getItemCount() = pings.size
+}

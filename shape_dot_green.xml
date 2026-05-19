@@ -1,0 +1,115 @@
+package com.example.nammarailubuddy
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+
+class AlarmSetupActivity : AppCompatActivity() {
+
+    private lateinit var etDestStation: EditText
+    private lateinit var rvDestSuggestions: RecyclerView
+    private lateinit var tvAlarmStatus: TextView
+    private lateinit var btnStartAlarm: Button
+    private lateinit var btnStopAlarm: Button
+
+    private var selectedDestination: Station? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_alarm_setup)
+
+        etDestStation = findViewById(R.id.etDestStation)
+        rvDestSuggestions = findViewById(R.id.rvDestSuggestions)
+        tvAlarmStatus = findViewById(R.id.tvAlarmStatus)
+        btnStartAlarm = findViewById(R.id.btnStartAlarm)
+        btnStopAlarm = findViewById(R.id.btnStopAlarm)
+
+        rvDestSuggestions.layoutManager = LinearLayoutManager(this)
+
+        etDestStation.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val query = s.toString().trim()
+                if (query.length >= 2) {
+                    val results = TrainDataRepository.searchStations(query)
+                    showSuggestions(results)
+                } else {
+                    rvDestSuggestions.visibility = View.GONE
+                }
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
+
+        btnStartAlarm.setOnClickListener {
+            val dest = selectedDestination
+            if (dest == null) {
+                Toast.makeText(this, "Please select a destination station", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            if (!hasLocationPermission()) {
+                requestLocationPermission()
+                return@setOnClickListener
+            }
+            startProximityAlarm(dest)
+        }
+
+        btnStopAlarm.setOnClickListener {
+            stopService(Intent(this, ProximityAlarmService::class.java))
+            tvAlarmStatus.text = "Alarm stopped."
+            btnStopAlarm.visibility = View.GONE
+            btnStartAlarm.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showSuggestions(stations: List<Station>) {
+        if (stations.isEmpty()) { rvDestSuggestions.visibility = View.GONE; return }
+        rvDestSuggestions.visibility = View.VISIBLE
+        rvDestSuggestions.adapter = StationSuggestionAdapter(stations) { station ->
+            selectedDestination = station
+            etDestStation.setText(station.name)
+            rvDestSuggestions.visibility = View.GONE
+        }
+    }
+
+    private fun startProximityAlarm(destination: Station) {
+        val intent = Intent(this, ProximityAlarmService::class.java).apply {
+            putExtra("dest_lat", destination.latitude)
+            putExtra("dest_lon", destination.longitude)
+            putExtra("dest_name", destination.name)
+        }
+        ContextCompat.startForegroundService(this, intent)
+        tvAlarmStatus.text = "✅ Alarm active for ${destination.name}\nWill alert 5km before arrival."
+        btnStartAlarm.visibility = View.GONE
+        btnStopAlarm.visibility = View.VISIBLE
+    }
+
+    private fun hasLocationPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestLocationPermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+            100
+        )
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            selectedDestination?.let { startProximityAlarm(it) }
+        }
+    }
+}
